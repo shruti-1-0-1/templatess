@@ -1,0 +1,138 @@
+#include <raylib.h>
+
+// Maze dimensions
+const int mazeWidth = 20;
+const int mazeHeight = 20;
+const int cellSize = 35;
+
+// Maze layout (1 = wall, 0 = path)
+int maze[mazeHeight][mazeWidth] = {
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1},
+    {1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1},
+    {1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1},
+    {1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1},
+    {1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+    {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+};
+
+// Player starting position
+Vector2 playerPosition = {1 * cellSize, 1 * cellSize};
+const float playerSpeed = 4.0f; // Speed of player movement
+void DisplayRiddle() {
+    const char *riddle = "What has keys but can't open locks?"; // Example riddle
+    DrawText(riddle, GetScreenWidth() / 2 - MeasureText(riddle, 20) / 2, GetScreenHeight() / 2, 20, BLACK);
+}
+
+void DrawMaze() {
+    for (int y = 0; y < mazeHeight; y++) {
+        for (int x = 0; x < mazeWidth; x++) {
+            if (maze[y][x] == 1) {
+                // Draw walls
+                DrawRectangle(x * cellSize, y * cellSize, cellSize, cellSize, BROWN);
+            } else {
+                // Draw paths
+                DrawRectangle(x * cellSize, y * cellSize, cellSize, cellSize, BEIGE);
+            }
+        }
+    }
+}
+
+int main() {
+    InitWindow(mazeWidth*cellSize, mazeHeight*cellSize, "Maze Game");
+    InitAudioDevice();
+
+    // Load textures
+    Texture2D harryTexture = LoadTexture("src\\harry.png"); // Player texture
+
+    // Load sounds
+    Sound jungleSound = LoadSound("src\\sound.wav");
+    Sound winSound = LoadSound("src\\win.wav");
+
+    // Scale factor to make the player fit the cell size
+    float scaleFactor = (float)cellSize / (float)harryTexture.width;
+
+    SetTargetFPS(60);
+    PlaySound(jungleSound);
+    
+
+    while (!WindowShouldClose()) {
+        if (!IsSoundPlaying(jungleSound)) {
+            PlaySound(jungleSound);  // Replay sound if it finished
+        }
+
+        // Calculate player position in cell coordinates
+        int cellX = (int)(playerPosition.x / cellSize);
+        int cellY = (int)(playerPosition.y / cellSize);
+
+        // Player movement
+        if (IsKeyDown(KEY_RIGHT) && maze[cellY][cellX + 1] == 0) {
+            playerPosition.x += playerSpeed;
+        }
+        if (IsKeyDown(KEY_LEFT) && maze[cellY][cellX - 1] == 0) {
+            playerPosition.x -= playerSpeed;
+        }
+        if (IsKeyDown(KEY_DOWN) && maze[cellY + 1][cellX] == 0) {
+            playerPosition.y += playerSpeed;
+        }
+        if (IsKeyDown(KEY_UP) && maze[cellY - 1][cellX] == 0) {
+            playerPosition.y -= playerSpeed;
+        }
+
+        // Ensure the player stays within the bounds of the maze
+        if (playerPosition.x < 0) playerPosition.x = 0;
+        if (playerPosition.y < 0) playerPosition.y = 0;
+        if (playerPosition.x > (mazeWidth - 1) * cellSize) playerPosition.x = (mazeWidth - 1) * cellSize;
+        if (playerPosition.y > (mazeHeight - 1) * cellSize) playerPosition.y = (mazeHeight - 1) * cellSize;
+
+        BeginDrawing();
+        ClearBackground(DARKGREEN);  // Background color to match jungle theme
+
+        DrawMaze();
+
+        // Draw the player as a rectangle with a texture
+        Rectangle playerFrame = { playerPosition.x, playerPosition.y, (float)cellSize, (float)cellSize };
+        DrawRectangleRec(playerFrame, BEIGE); // Frame around player
+        DrawTextureEx(harryTexture, (Vector2){ playerFrame.x, playerFrame.y }, 0.0f, scaleFactor, WHITE); // Player texture
+
+        // Check if the player reached the exit (bottom-right corner)
+        // if (cellX == mazeWidth - 2 && cellY == mazeHeight - 2) {
+        //     StopSound(jungleSound);
+        //     PlaySound(winSound);
+        //     DrawText("You Win!", GetScreenWidth() / 2 - 50, GetScreenHeight() / 2 - 10, 20, GREEN);
+        // }
+        if (cellX == mazeWidth - 2 && cellY == mazeHeight - 2 ) {
+            StopSound(jungleSound);
+            PlaySound(winSound);
+             DrawText("You Win!", GetScreenWidth() / 2 - 50, GetScreenHeight() / 2 - 10, 50, GREEN);
+            // hasWon = true; // Set flag to true to prevent replaying win sound
+        }
+         if (CheckWinningCondition()) {
+            DisplayRiddle();
+        }
+
+        EndDrawing();
+    }
+
+    // Unload resources
+    UnloadTexture(harryTexture);
+    UnloadSound(jungleSound);
+    UnloadSound(winSound);
+    CloseAudioDevice();
+    CloseWindow();
+
+    return 0;
+}
