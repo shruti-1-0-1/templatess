@@ -1,138 +1,220 @@
-#include <raylib.h>
+#include "raylib.h"
+#include <vector>
+#include <cstdlib>
+#include <ctime>
 
-// Maze dimensions
-const int mazeWidth = 20;
-const int mazeHeight = 20;
-const int cellSize = 35;
+const int nrows = 20; // Number of rows
+const int ncols = 20; // Number of columns
+const int cellSize = 30; // Size of each cell
+const int numGhosts = 5; // Number of ghosts
 
-// Maze layout (1 = wall, 0 = path)
-int maze[mazeHeight][mazeWidth] = {
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1},
-    {1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1},
-    {1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-    {1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1},
-    {1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1},
-    {1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1},
-    {1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1},
-    {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1},
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-    {1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+// Cell structure definition
+struct Cell {
+    bool visited = false;
+    bool walls[4] = { true, true, true, true }; // Top, Right, Bottom, Left
+    int r, c; // Row and Column
+    std::vector<Cell*> neighbors; // Neighboring cells
 };
 
-// Player starting position
-Vector2 playerPosition = {1 * cellSize, 1 * cellSize};
-const float playerSpeed = 4.0f; // Speed of player movement
-void DisplayRiddle() {
-    const char *riddle = "What has keys but can't open locks?"; // Example riddle
-    DrawText(riddle, GetScreenWidth() / 2 - MeasureText(riddle, 20) / 2, GetScreenHeight() / 2, 20, BLACK);
+// Player structure definition
+struct Player {
+    int r, c; // Player's row and column position
+    Texture2D texture; // Player texture
+};
+
+// Ghost structure definition
+struct Ghost {
+    int r, c; // Ghost's row and column position
+    Color color; // Ghost color
+};
+
+// Global variables
+std::vector<Cell> grid(nrows * ncols);
+Cell* current = nullptr;
+std::vector<Cell*> stack;
+bool play = false;
+Player player = { 0, 0 }; // Initialize player at the starting position
+std::vector<Ghost> ghosts; // List of ghosts
+
+// Function to initialize the grid
+void InitGrid() {
+    for (int r = 0; r < nrows; r++) {
+        for (int c = 0; c < ncols; c++) {
+            grid[r * ncols + c].r = r;
+            grid[r * ncols + c].c = c;
+            if (r > 0) grid[r * ncols + c].neighbors.push_back(&grid[(r - 1) * ncols + c]); // Top neighbor
+            if (c < ncols - 1) grid[r * ncols + c].neighbors.push_back(&grid[r * ncols + (c + 1)]); // Right neighbor
+            if (r < nrows - 1) grid[r * ncols + c].neighbors.push_back(&grid[(r + 1) * ncols + c]); // Bottom neighbor
+            if (c > 0) grid[r * ncols + c].neighbors.push_back(&grid[r * ncols + (c - 1)]); // Left neighbor
+        }
+    }
 }
 
 void DrawMaze() {
-    for (int y = 0; y < mazeHeight; y++) {
-        for (int x = 0; x < mazeWidth; x++) {
-            if (maze[y][x] == 1) {
-                // Draw walls
-                DrawRectangle(x * cellSize, y * cellSize, cellSize, cellSize, BROWN);
-            } else {
-                // Draw paths
-                DrawRectangle(x * cellSize, y * cellSize, cellSize, cellSize, BEIGE);
+    for (int r = 0; r < nrows; r++) {
+        for (int c = 0; c < ncols; c++) {
+            Cell& cell = grid[r * ncols + c];
+            // Draw cell background
+            if (cell.visited) {
+                DrawRectangle(c * cellSize, r * cellSize, cellSize, cellSize, DARKGRAY);
             }
+            // Draw walls
+            if (cell.walls[0]) DrawLine(c * cellSize, r * cellSize, (c + 1) * cellSize, r * cellSize, BLACK); // Top
+            if (cell.walls[1]) DrawLine((c + 1) * cellSize, r * cellSize, (c + 1) * cellSize, (r + 1) * cellSize, BLACK); // Right
+            if (cell.walls[2]) DrawLine(c * cellSize, (r + 1) * cellSize, (c + 1) * cellSize, (r + 1) * cellSize, BLACK); // Bottom
+            if (cell.walls[3]) DrawLine(c * cellSize, r * cellSize, c * cellSize, (r + 1) * cellSize, BLACK); // Left
+        }
+    }
+
+    // Draw the player's frame
+    int playerFrameX = player.c * cellSize; // X position of the player's frame
+    int playerFrameY = player.r * cellSize; // Y position of the player's frame
+    DrawRectangle(playerFrameX, playerFrameY, cellSize, cellSize, WHITE); // Frame background
+
+    // Draw the player texture with scaling
+    float scale = 0.05f; // Scale the player texture to 5% of original size
+    DrawTextureEx(player.texture,
+                   Vector2{playerFrameX + (cellSize - player.texture.width * scale) / 2,
+                            playerFrameY + (cellSize - player.texture.height * scale) / 2},
+                   0.0f, // No rotation
+                   scale, // Scale factor
+                   WHITE); // Color tint
+
+    // Draw ghosts
+    for (const Ghost& ghost : ghosts) {
+        DrawRectangle(ghost.c * cellSize, ghost.r * cellSize, cellSize, cellSize, ghost.color);
+    }
+}
+
+void MazeGenerator() {
+    if (!current->visited) {
+        current->visited = true;
+        stack.push_back(current);
+    }
+
+    std::vector<Cell*> unvisited;
+    for (Cell* neigh : current->neighbors) {
+        if (!neigh->visited) {
+            unvisited.push_back(neigh);
+        }
+    }
+
+    if (!unvisited.empty()) {
+        int randomIndex = std::rand() % unvisited.size();
+        Cell* next = unvisited[randomIndex];
+
+        // Remove walls
+        if (current->r - next->r == 1) { // Top
+            current->walls[0] = false;
+            next->walls[2] = false;
+        } else if (current->c - next->c == 1) { // Left
+            current->walls[3] = false;
+            next->walls[1] = false;
+        } else if (current->r - next->r == -1) { // Bottom
+            current->walls[2] = false;
+            next->walls[0] = false;
+        } else if (current->c - next->c == -1) { // Right
+            current->walls[1] = false;
+            next->walls[3] = false;
+        }
+
+        current = next;
+    } else if (!stack.empty()) {
+        current = stack.back();
+        stack.pop_back();
+    } else {
+        play = true; // Maze generation completed
+    }
+}
+
+void UpdatePlayer() {
+    // Check for player movement
+    if (IsKeyDown(KEY_UP) && !grid[player.r * ncols + player.c].walls[0]) { // Up
+        player.r--;
+    }
+    if (IsKeyDown(KEY_RIGHT) && !grid[player.r * ncols + player.c].walls[1]) { // Right
+        player.c++;
+    }
+    if (IsKeyDown(KEY_DOWN) && !grid[player.r * ncols + player.c].walls[2]) { // Down
+        player.r++;
+    }
+    if (IsKeyDown(KEY_LEFT) && !grid[player.r * ncols + player.c].walls[3]) { // Left
+        player.c--;
+    }
+}
+
+// Function to initialize ghosts
+void InitGhosts() {
+    for (int i = 0; i < numGhosts; i++) {
+        Ghost ghost;
+        ghost.r = std::rand() % nrows;
+        ghost.c = std::rand() % ncols;
+        ghost.color = (i % 2 == 0) ? RED : BLUE; // Alternate colors for ghosts
+        ghosts.push_back(ghost);
+    }
+}
+
+// Function to update ghosts
+void UpdateGhosts() {
+    for (Ghost& ghost : ghosts) {
+        int direction = std::rand() % 4; // Random direction: 0 = up, 1 = right, 2 = down, 3 = left
+
+        int newR = ghost.r;
+        int newC = ghost.c;
+
+        switch (direction) {
+            case 0: newR--; break; // Up
+            case 1: newC++; break; // Right
+            case 2: newR++; break; // Down
+            case 3: newC--; break; // Left
+        }
+
+        // Check for valid move
+        if (newR >= 0 && newR < nrows && newC >= 0 && newC < ncols && 
+            !grid[ghost.r * ncols + ghost.c].walls[direction]) {
+            ghost.r = newR;
+            ghost.c = newC;
+        }
+
+        // Check for collision with player
+        if (ghost.r == player.r && ghost.c == player.c) {
+            // Reset player to initial position
+            player.r = 0;
+            player.c = 0;
         }
     }
 }
 
 int main() {
-    InitWindow(mazeWidth*cellSize, mazeHeight*cellSize, "Maze Game");
-    InitAudioDevice();
-
-    // Load textures
-    Texture2D harryTexture = LoadTexture("src\\harry.png"); // Player texture
-
-    // Load sounds
-    Sound jungleSound = LoadSound("src\\sound.wav");
-    Sound winSound = LoadSound("src\\win.wav");
-
-    // Scale factor to make the player fit the cell size
-    float scaleFactor = (float)cellSize / (float)harryTexture.width;
-
+    InitWindow(ncols * cellSize, nrows * cellSize, "Maze Generator");
     SetTargetFPS(60);
-    PlaySound(jungleSound);
-    
+    std::srand(static_cast<unsigned>(std::time(0))); // Seed random number generator
+
+    InitGrid(); // Initialize the grid
+    current = &grid[0]; // Start from the first cell
+
+    // Load player texture
+    player.texture = LoadTexture("src/harry.png"); // Ensure this path is correct
+    InitGhosts(); // Initialize ghosts
 
     while (!WindowShouldClose()) {
-        if (!IsSoundPlaying(jungleSound)) {
-            PlaySound(jungleSound);  // Replay sound if it finished
+        if (!play) {
+            MazeGenerator(); // Generate the maze
+        } else {
+            UpdatePlayer(); // Update player position
+            UpdateGhosts(); // Update ghosts
         }
-
-        // Calculate player position in cell coordinates
-        int cellX = (int)(playerPosition.x / cellSize);
-        int cellY = (int)(playerPosition.y / cellSize);
-
-        // Player movement
-        if (IsKeyDown(KEY_RIGHT) && maze[cellY][cellX + 1] == 0) {
-            playerPosition.x += playerSpeed;
-        }
-        if (IsKeyDown(KEY_LEFT) && maze[cellY][cellX - 1] == 0) {
-            playerPosition.x -= playerSpeed;
-        }
-        if (IsKeyDown(KEY_DOWN) && maze[cellY + 1][cellX] == 0) {
-            playerPosition.y += playerSpeed;
-        }
-        if (IsKeyDown(KEY_UP) && maze[cellY - 1][cellX] == 0) {
-            playerPosition.y -= playerSpeed;
-        }
-
-        // Ensure the player stays within the bounds of the maze
-        if (playerPosition.x < 0) playerPosition.x = 0;
-        if (playerPosition.y < 0) playerPosition.y = 0;
-        if (playerPosition.x > (mazeWidth - 1) * cellSize) playerPosition.x = (mazeWidth - 1) * cellSize;
-        if (playerPosition.y > (mazeHeight - 1) * cellSize) playerPosition.y = (mazeHeight - 1) * cellSize;
 
         BeginDrawing();
-        ClearBackground(DARKGREEN);  // Background color to match jungle theme
-
-        DrawMaze();
-
-        // Draw the player as a rectangle with a texture
-        Rectangle playerFrame = { playerPosition.x, playerPosition.y, (float)cellSize, (float)cellSize };
-        DrawRectangleRec(playerFrame, BEIGE); // Frame around player
-        DrawTextureEx(harryTexture, (Vector2){ playerFrame.x, playerFrame.y }, 0.0f, scaleFactor, WHITE); // Player texture
-
-        // Check if the player reached the exit (bottom-right corner)
-        // if (cellX == mazeWidth - 2 && cellY == mazeHeight - 2) {
-        //     StopSound(jungleSound);
-        //     PlaySound(winSound);
-        //     DrawText("You Win!", GetScreenWidth() / 2 - 50, GetScreenHeight() / 2 - 10, 20, GREEN);
-        // }
-        if (cellX == mazeWidth - 2 && cellY == mazeHeight - 2 ) {
-            StopSound(jungleSound);
-            PlaySound(winSound);
-             DrawText("You Win!", GetScreenWidth() / 2 - 50, GetScreenHeight() / 2 - 10, 50, GREEN);
-            // hasWon = true; // Set flag to true to prevent replaying win sound
-        }
-         if (CheckWinningCondition()) {
-            DisplayRiddle();
-        }
-
+        ClearBackground(RAYWHITE);
+        DrawMaze(); // Draw the maze
         EndDrawing();
     }
 
-    // Unload resources
-    UnloadTexture(harryTexture);
-    UnloadSound(jungleSound);
-    UnloadSound(winSound);
-    CloseAudioDevice();
-    CloseWindow();
+    // Unload player
 
+    // Unload player texture
+    UnloadTexture(player.texture);
+    CloseWindow();
     return 0;
 }
